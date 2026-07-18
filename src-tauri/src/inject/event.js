@@ -531,6 +531,11 @@ function shouldBypassPakeLinkHandling(rawHref) {
 }
 
 function shouldNavigateAuthInCurrentWindow() {
+  // With --new-window, macOS opens auth popups natively so WebKit wires
+  // window.opener (OAuth postMessage logins); otherwise navigate in place.
+  if (window.pakeConfig?.new_window) {
+    return false;
+  }
   return /macintosh|mac os x/i.test(navigator.userAgent);
 }
 
@@ -853,7 +858,8 @@ document.addEventListener("DOMContentLoaded", () => {
       return originalWindowOpen.call(window, url, name, specs);
     }
 
-    // Avoid macOS WebKit auth-popup crashes by navigating auth URLs in-place.
+    // Auth popups: native child window under --new-window, else in-place. See
+    // openAuthNavigation.
     if (window.isAuthPopup(url, name)) {
       try {
         const baseUrl = window.location.origin + window.location.pathname;

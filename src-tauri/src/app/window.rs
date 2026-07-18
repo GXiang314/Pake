@@ -76,6 +76,7 @@ struct WindowBuildOptions<'a> {
     new_window_features: Option<NewWindowFeatures>,
 }
 
+#[cfg(not(target_os = "macos"))]
 fn open_requested_window(
     app: &AppHandle,
     config: &PakeConfig,
@@ -270,6 +271,23 @@ fn build_window(
         let popup_config = config.clone();
         let popup_tauri_config = tauri_config.clone();
         window_builder = window_builder.on_new_window(move |target_url, features| {
+            // macOS: Allow lets WebKit build the popup so window.opener is wired
+            // for OAuth postMessage logins (a Create popup has opener == null).
+            // The #1194 duplicate-handler crash is avoided in the wry patch,
+            // which strips the opener config's handlers before creating popups.
+            #[cfg(target_os = "macos")]
+            {
+                let _ = (
+                    &app_handle,
+                    &popup_config,
+                    &popup_tauri_config,
+                    &target_url,
+                    &features,
+                );
+                NewWindowResponse::Allow
+            }
+
+            #[cfg(not(target_os = "macos"))]
             match open_requested_window(
                 &app_handle,
                 &popup_config,
@@ -421,27 +439,10 @@ fn build_window(
         println!("Proxy configured: {}", config.proxy_url);
     }
 
+    // macOS returns Allow from on_new_window (WebKit builds the popup), so
+    // new_window_features is only ever Some on other platforms.
     if let Some(features) = new_window_features {
-        // Reuse only opener-provided position/size on macOS; sharing the opener
-        // WKWebViewConfiguration triggers duplicate WKScriptMessageHandler
-        // registrations on macOS 26+ and crashes the app (issue #1194).
-        #[cfg(target_os = "macos")]
-        {
-            if let Some(position) = features.position() {
-                window_builder = window_builder.position(position.x, position.y);
-            }
-
-            if let Some(size) = features.size() {
-                window_builder = window_builder.inner_size(size.width, size.height);
-            }
-
-            window_builder = window_builder.focused(true);
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        {
-            window_builder = window_builder.window_features(features).focused(true);
-        }
+        window_builder = window_builder.window_features(features).focused(true);
     }
 
     // Capture webview-initiated downloads (blob:, data:, Content-Disposition,

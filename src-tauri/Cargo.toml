@@ -51,6 +51,14 @@ default = ["custom-protocol"]
 # DO NOT remove this
 custom-protocol = ["tauri/custom-protocol"]
 
+# macOS window.open OAuth popup fix: keeps window.opener alive and auto-closes
+# the popup at the OAuth completion page. Lives in a wry fork branch based on
+# 0.54.x so its version matches what tauri-runtime-wry resolves (a mismatched
+# version makes cargo silently ignore the patch). The opener half is proposed
+# upstream (tauri-apps/wry); drop this once it ships and Tauri picks it up.
+[patch.crates-io]
+wry = { git = "https://github.com/gxiang314/wry", branch = "macos-oauth-popup-0.54" }
+
 [profile.release]
 panic = "abort"
 codegen-units = 1
